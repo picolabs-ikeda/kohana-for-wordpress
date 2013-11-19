@@ -43,7 +43,8 @@ define('EXT', get_option('kohana_ext') );
  * In a production environment, it is safe to ignore notices and strict warnings.
  * Disable them by using: E_ALL ^ E_NOTICE
  */
-// error_reporting(E_ALL | E_STRICT);
+//error_reporting(E_ALL | E_STRICT);
+error_reporting(E_ERROR);
 
 /**
  * End of standard configuration! Changing any of the code below should only be
@@ -82,17 +83,17 @@ define('KOHANA_START_TIME', microtime(TRUE));
 // require SYSPATH.'base'.EXT;
 
 // Load the core Kohana class			***** Include Kohana class from path defined in kohana settings
-require get_option('kohana_system_path').'classes/kohana/core'.get_option('kohana_ext');
+require get_option('kohana_system_path').'classes/Kohana/Core'.get_option('kohana_ext');
  
-if (is_file(get_option('kohana_application_path').'classes/kohana'.get_option('kohana_ext')))
+if (is_file(get_option('kohana_application_path').'classes/Kohana'.get_option('kohana_ext')))
 {
 	// Application extends the core
-	require get_option('kohana_application_path').'classes/kohana'.get_option('kohana_ext');
+	require get_option('kohana_application_path').'classes/Kohana'.get_option('kohana_ext');
 }
 else
 {
 	// Load empty core extension
-	require get_option('kohana_system_path').'classes/kohana'.get_option('kohana_ext');
+	require get_option('kohana_system_path').'classes/Kohana'.get_option('kohana_ext');
 }
 
 // Bootstrap the application			***** Not including bootstrap in application path.

@@ -13,9 +13,11 @@ ini_set('error_log','/var/log/php-error.log');
 /**
  * Register Actions
  */
-register_activation_hook( 'kohana-for-wordpress/kohana-for-wordpress.php', 'kohana_activate' );
-register_deactivation_hook( 'kohana-for-wordpress/kohana-for-wordpress.php', 'kohana_deactivate' );
-add_action('admin_menu', 'kohana_register_admin_menu');
+ if (is_admin()) {
+	register_activation_hook(__FILE__, 'kohana_activate' );
+	register_deactivation_hook(__FILE__, 'kohana_deactivate' );
+	add_action('admin_menu', 'kohana_register_admin_menu');
+}
 add_action('widgets_init', create_function('', 'return register_widget("KohanaWidget");'));
 add_action('wp_head', 'kohana_wp_head');
 
@@ -71,6 +73,11 @@ function kohana_wp_head() {
  * Include bootstrap.php which sets up the Kohana environment so
  * that it's ready for a request if given one.
  */ 
+
+global $wp;
+if (!property_exists($wp, 'kohana')) {
+	$wp->kohana = new StdClass;
+}
 if( should_kohana_run() ){
 	require 'kohana_index.php';
 	if( get_option('kohana_bootstrap_path') ) {
@@ -90,7 +97,6 @@ require 'kohana_widget.php';
  */ 
 function kohana_activate()
 {
-	error_log('activating kohana plugin');
 	
 	// Create a page in word press to act as the kohana frontloader
 	$my_post = array();
@@ -127,7 +133,6 @@ function kohana_activate()
  */
 function kohana_deactivate()
 {
-	error_log('deactivating kohana plugin');
 	
 	wp_delete_post( get_option('kohana_front_loader') );
 	
@@ -200,12 +205,14 @@ function should_kohana_run()
 			return false;
 	}
 	// If main kohana class file is not found in system path return false
-	if( ! is_file( get_option('kohana_system_path') . 'classes/kohana.php' ) )
+	if( ! is_file( get_option('kohana_system_path') . 'classes/Kohana.php' ) ) {
 		return false;
-		
+	}
+
 	// If default route not set return false
-	if( ! get_option('kohana_default_controller') OR ! get_option('kohana_default_action') )
+	if( ! get_option('kohana_default_controller') OR ! get_option('kohana_default_action') ) {
 		return false;
+	}
 
 	// We should be good to go, return true.	
 	return true;
@@ -239,15 +246,15 @@ function kohana_request_filter($request)
 	global $wpdb;
 	
 	// Get the wordpress page_name of our kohana front loader
-	$wp->kohana->front_loader_slug = $wpdb->get_var("SELECT post_name FROM $wpdb->posts WHERE ID = " . get_option('kohana_front_loader') );	
+	$query = $wpdb->prepare("SELECT post_name FROM $wpdb->posts WHERE ID = %d", get_option('kohana_front_loader') );	
+	$wp->kohana->front_loader_slug = $wpdb->get_var($query);
+//	$wp->kohana->front_loader_slug = $wpdb->get_var("SELECT post_name FROM $wpdb->posts WHERE ID = " . get_option('kohana_front_loader') );	
 	
 	// attempt to validate the request by looking for a post or page id
 	$requested_post_id = kohana_validate_wp_request($request);
-	//error_log( "Found the post/page id of $requested_post_id" );
 	
 	// If request is not for a valid word press page. Look for valid kohana request
 	if( ! $requested_post_id && get_option('kohana_process_all_uri') ){
-		//error_log( "No page found and process all uri is enabled. Examining uri for Kohana controller request" );
 		// Parse query string and look for kohana type requests
 		$kohana_request = kohana_parse_request();	
 		
@@ -261,9 +268,7 @@ function kohana_request_filter($request)
 		}
 	// Request is for our wordpress kohana front loader	
 	} else if( $requested_post_id == get_option('kohana_front_loader') ) {
-		//error_log( "Request for Kohana front loader provided. Examine URI for Kohana controller request" );
 		$kohana_request = kohana_parse_request();
-		error_log("Kohana request is $kohana_request");	
 		$wp->kohana->request = ( $kohana_request ) ? $kohana_request : 'wp_kohana_default_request';
 		$wp->kohana->placement = get_option('kohana_default_placement');
 		// Just because we found the front loader, wp may still think this is a 404
@@ -308,6 +313,7 @@ function kohana_validate_wp_request( $request )
 	// request contains a 'pagename' or 'name' (permalinks)
 	if( $request['pagename'] || $request['name'] ) {
 		$name = ($request['pagename']) ? $request['pagename'] : $request['name'];
+		$name = str_replace('/undefined', '', $name);
 		$has_id = $wpdb->get_var("SELECT ID FROM $wpdb->posts WHERE post_name = '$name'");
 		return ( $has_id )  ? $has_id : 0 ; 
 	}
@@ -366,24 +372,20 @@ function kohana_parse_request()
 	// Remove index.php from our string
 	$kr = str_replace('/index.php','',$kr);
 	
-	//error_log("Starting point Examining KR: $kr");
 	
 	// Remove slash from front kr string
 	if( substr($kr,0,1) == '/' ){
 		$kr = substr($kr,1);
 	}
-	//error_log("Removed trailing slash Examining KR: $kr");
 	// Remove slash from end of kr string
 	if( substr($kr,-1) == '/' ){
 		$kr = substr( $kr,0,-1 );
 	}
-	//error_log("Removed starting slash Examining KR: $kr");
 	
 	// check for presense of the kohana front loader slug
 	if( $wp->kohana->front_loader_slug == substr( $kr, 0, strlen($wp->kohana->front_loader_slug) ) ){
 		$kr = substr($kr, strlen($wp->kohana->front_loader_slug.'/') );
 	}
-	//error_log("Removed front loader slug Examining KR: $kr");
 	
 	// Get the controller name.
 	if( strpos($kr,'/') ){ 
@@ -393,9 +395,8 @@ function kohana_parse_request()
 	}
 	if( $k_controller && ! $kr ) $kr = 'index';
 	
-	//error_log("Found Controller = $k_controller :: Examining: $kr");
 	// Check for the presence of a kohana controller for current request
-	if( $kr && is_file( get_option('kohana_application_path') .'classes/controller/'.$k_controller.get_option('kohana_ext') ) ){
+	if( $kr && is_file( get_option('kohana_application_path') .'classes/Controller/'.ucfirst($k_controller).get_option('kohana_ext') ) ){
 		return $kr;
 	}
 	
@@ -523,7 +524,12 @@ function kohana_title_filter($title)
 	
 	global $wp;
 	global $post;
-	if( $wp->kohana->title && $title == $post->post_title && $post->ID == get_option('kohana_front_loader') ){
+	if ($wp->kohana->title === FALSE ||
+		$post->ID == get_option('kohana_front_loader')){
+		return '';
+	}
+
+	if( $wp->kohana->title ){
 		$title = $wp->kohana->title;
 	}
 	return $title;
@@ -544,7 +550,12 @@ function kohana_page_request($kr)
 	$kr = ($kr=='wp_kohana_default_request') ? '' : $kr ;	
 	
 	try {
-		$req = Request::instance($kr);
+		if (version_compare(Kohana::VERSION, '3.3.0', '>=')) {
+			$req = Request::factory($kr);
+		}
+		else {
+			$req = Request::instance($kr);
+		}
 		$req = $req->execute();
 	}
 	catch( Exception $e )
@@ -557,13 +568,20 @@ function kohana_page_request($kr)
 		throw $e;
 	}
 	
-	if( $req->title ){
-		$wp->kohana->title = $req->title;
+	// 本来はきちんとContent-Typeやらを見るべきか。
+	if (version_compare(Kohana::VERSION, '3.3.0', '>=')) {
+		$wp->kohana->title = FALSE;
+		return $req->body();
 	}
-    if( $req->extra_head ){
-        $wp->kohana->extra_head = $req->extra_head;
-    }
-	return $req->response;	
+	else {
+		if( $req->title ){
+			$wp->kohana->title = $req->title;
+		}
+		if( $req->extra_head ){
+			$wp->kohana->extra_head = $req->extra_head;
+		}
+		return $req->response;	
+	}
 }
 
 /**
@@ -615,7 +633,6 @@ function __k($string, array $values = NULL, $lang = 'en-us')
  */
 if( ! function_exists('__') ){
 	
-	
 	function __($string, $values = NULL, $lang = 'en-us')
 	{
 		if( ! is_array( $values ) ){
@@ -630,9 +647,6 @@ if( ! function_exists('__') ){
 			// Get the translation for this message
 			$string = I18n::get($string);
 		}
-	
 		return empty($values) ? $string : strtr($string, $values);
 	}	
-	
-	
 }

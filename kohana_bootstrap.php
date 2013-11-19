@@ -19,6 +19,7 @@ date_default_timezone_set(get_option('timezone_string'));
  * @see  http://php.net/spl_autoload_register
  */
 spl_autoload_register(array('Kohana', 'auto_load'));
+//spl_autoload_register(array('Kohana', 'auto_load_lowercase'));
 
 /**
  * Enable Kohana exception handling, adds stack traces and error source.
@@ -26,7 +27,7 @@ spl_autoload_register(array('Kohana', 'auto_load'));
  * @see  http://docs.kohanaphp.com/features/exceptions
  * @see  http://php.net/set_exception_handler
  */
-set_exception_handler(array('Kohana', 'exception_handler'));
+//set_exception_handler(array('Kohana', 'exception_handler'));
 
 /**
  * Enable Kohana error handling, converts all PHP errors to exceptions.
@@ -53,7 +54,11 @@ $kohana_base_url = str_replace(get_option('home'),'',get_option('siteurl') );
 if( ! $kohana_base_url ) {
 	$kohana_base_url = '/';
 }
-Kohana::init(array('charset' => 'utf-8', 'base_url' => $kohana_base_url ));
+Kohana::init(array(
+	'charset'		=> 'utf-8',
+	'base_url'		=> $kohana_base_url,
+	'index_file'	=> FALSE,
+));
 
 /**		**** Enable modules as defined in plugin settings
  * Enable modules. Modules are referenced by a relative or absolute path.
@@ -67,12 +72,14 @@ Kohana::modules($mods);
 /**
 * Attach the file write to logging. Multiple writers are supported.
 */
-Kohana::$log->attach(new Kohana_Log_File(APPPATH.'logs'));
+Kohana::$log->attach(new Kohana_Log_File(APPPATH.'logs'), array(Log::WARNING));
  
 /**
 * Attach a file reader to config. Multiple readers are supported.
 */
 Kohana::$config->attach(new Kohana_Config_File);
+
+Cookie::$salt = '813be2cf160dc4630c0f49fc5dce4d0a';
 
 /**
  * Set the routes. Each route must have a minimum of a name, a URI and a set of
